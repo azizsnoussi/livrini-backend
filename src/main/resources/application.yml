@@ -22,4 +22,4 @@ jwt:
   expiration: 86400000 # 1 day
 
 cors:
-  origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:8080,http://localhost:57533,http://10.0.2.2:8089}
+  origins: ${CORS_ORIGINS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://localhost:57533,http://10.0.2.2:8089}
