@@ -60,6 +60,10 @@ public class OrderService {
             MenuItem menuItem = menuItemRepository.findById(itemReq.getMenuItemId())
                     .orElseThrow(() -> new RuntimeException("Menu item not found: " + itemReq.getMenuItemId()));
 
+                        if (!menuItem.getRestaurant().getId().equals(restaurant.getId())) {
+                                throw new RuntimeException("Menu item belongs to a different restaurant: " + menuItem.getName());
+                        }
+
             if (!menuItem.getIsAvailable()) {
                 throw new RuntimeException("Item is not available: " + menuItem.getName());
             }
