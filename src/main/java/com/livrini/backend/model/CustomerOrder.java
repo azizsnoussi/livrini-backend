@@ -39,6 +39,22 @@ public class CustomerOrder {
 
     private String deliveryAddress;
 
+    private String country;
+
+    private String governorate;
+
+    private String city;
+
+    private String neighborhood;
+
+    private String street;
+
+    private String buildingNumber;
+
+    private String apartment;
+
+    private String postalCode;
+
     private Double lat;
 
     private Double lng;
