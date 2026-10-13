@@ -24,6 +24,9 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in backend/.env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in backend/.env}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      MAX_ACTIVE_ORDERS: ${MAX_ACTIVE_ORDERS:-3}
+      LOCATION_FRESHNESS_SECONDS: ${LOCATION_FRESHNESS_SECONDS:-60}
+      MAX_PICKUP_RADIUS_KM: ${MAX_PICKUP_RADIUS_KM:-25}
     ports:
       - "${APP_PORT:-8089}:8089"
     depends_on:

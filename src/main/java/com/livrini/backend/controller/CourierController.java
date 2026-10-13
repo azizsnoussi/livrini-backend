@@ -39,8 +39,8 @@ public class CourierController {
     }
 
     @GetMapping("/available-orders")
-    public ResponseEntity<List<OrderDto>> getAvailableOrders() {
-        return ResponseEntity.ok(orderService.getAvailableOrdersForCourier());
+    public ResponseEntity<List<OrderDto>> getAvailableOrders(@AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(orderService.getAvailableOrdersForCourier(userDetails.getUsername()));
     }
 
     @PostMapping("/orders/{id}/accept")

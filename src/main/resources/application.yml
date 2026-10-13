@@ -24,3 +24,8 @@ jwt:
 
 cors:
   origins: ${CORS_ORIGINS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://localhost:57533,http://10.0.2.2:8089}
+
+dispatch:
+  max-active-orders: ${MAX_ACTIVE_ORDERS:3}
+  location-freshness-seconds: ${LOCATION_FRESHNESS_SECONDS:60}
+  max-pickup-radius-km: ${MAX_PICKUP_RADIUS_KM:25}

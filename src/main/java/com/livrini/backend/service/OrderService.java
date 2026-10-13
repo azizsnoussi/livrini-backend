@@ -4,6 +4,7 @@ import com.livrini.backend.dto.*;
 import com.livrini.backend.model.*;
 import com.livrini.backend.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,15 @@ public class OrderService {
     private final RestaurantRepository restaurantRepository;
     private final MenuItemRepository menuItemRepository;
     private final SimpMessagingTemplate messagingTemplate;
+
+        @Value("${dispatch.max-active-orders:3}")
+        private int maxActiveOrders;
+
+        @Value("${dispatch.location-freshness-seconds:60}")
+        private long locationFreshnessSeconds;
+
+        @Value("${dispatch.max-pickup-radius-km:25}")
+        private double maxPickupRadiusKm;
 
     @Transactional
     public OrderDto createOrder(String clientEmail, CreateOrderRequest request) {
@@ -164,8 +174,13 @@ public class OrderService {
     }
 
     // Courier Operations
-    public List<OrderDto> getAvailableOrdersForCourier() {
+    public List<OrderDto> getAvailableOrdersForCourier(String courierEmail) {
+        User courier = userRepository.findByEmail(courierEmail)
+                .orElseThrow(() -> new RuntimeException("Courier not found"));
+        if (!isEligibleForDispatch(courier)) return List.of();
+
         return orderRepository.findByCourierIsNullAndStatusIn(Arrays.asList(OrderStatus.ACCEPTED, OrderStatus.PREPARING, OrderStatus.READY)).stream()
+                .filter(order -> isWithinPickupRadius(courier, order))
                 .map(this::mapToOrderDto)
                 .collect(Collectors.toList());
     }
@@ -174,6 +189,10 @@ public class OrderService {
     public OrderDto acceptOrderAsCourier(UUID orderId, String courierEmail) {
         User courier = userRepository.findByEmail(courierEmail)
                 .orElseThrow(() -> new RuntimeException("Courier not found"));
+
+                if (!isEligibleForDispatch(courier)) {
+                        throw new RuntimeException("Courier is offline, location is stale, or active-order capacity is full");
+                }
 
         CustomerOrder order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
@@ -185,6 +204,10 @@ public class OrderService {
         if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.DELIVERED) {
             throw new RuntimeException("Order is no longer available");
         }
+
+                if (!isWithinPickupRadius(courier, order)) {
+                        throw new RuntimeException("Order pickup is outside the courier dispatch radius");
+                }
 
         order.setCourier(courier);
         order.setUpdatedAt(LocalDateTime.now());
@@ -345,25 +368,53 @@ public class OrderService {
 
         long ts = timestamp != null ? timestamp : System.currentTimeMillis();
 
-        if (orderId != null) {
-            CustomerOrder order = orderRepository.findById(orderId).orElse(null);
-            // Only broadcast for an active delivery actually assigned to this courier.
-            if (order != null
-                    && order.getCourier() != null
-                    && order.getCourier().getEmail().equalsIgnoreCase(courierEmail)
-                    && order.getStatus() != OrderStatus.DELIVERED
-                    && order.getStatus() != OrderStatus.CANCELLED) {
-                CourierLocationDto dto = CourierLocationDto.builder()
-                        .orderId(order.getId())
-                        .courierId(courier.getId())
-                        .courierName(courier.getName())
-                        .lat(lat)
-                        .lng(lng)
-                        .timestamp(ts)
-                        .build();
-                messagingTemplate.convertAndSend("/topic/orders/" + order.getId() + "/location", dto);
-            }
+        orderRepository.findByCourierOrderByCreatedAtDesc(courier).stream()
+                .filter(order -> order.getStatus() != OrderStatus.DELIVERED
+                        && order.getStatus() != OrderStatus.CANCELLED)
+                .forEach(order -> {
+                    CourierLocationDto dto = CourierLocationDto.builder()
+                            .orderId(order.getId())
+                            .courierId(courier.getId())
+                            .courierName(courier.getName())
+                            .lat(lat)
+                            .lng(lng)
+                            .timestamp(ts)
+                            .build();
+                    messagingTemplate.convertAndSend("/topic/orders/" + order.getId() + "/location", dto);
+                });
+    }
+
+    private boolean isEligibleForDispatch(User courier) {
+        if (!Boolean.TRUE.equals(courier.getIsOnline())
+                || courier.getLat() == null
+                || courier.getLng() == null
+                || courier.getLocationUpdatedAt() == null
+                || courier.getLocationUpdatedAt().isBefore(LocalDateTime.now().minusSeconds(locationFreshnessSeconds))) {
+            return false;
         }
+        long activeOrders = orderRepository.findByCourierOrderByCreatedAtDesc(courier).stream()
+                .filter(order -> order.getStatus() != OrderStatus.DELIVERED
+                        && order.getStatus() != OrderStatus.CANCELLED)
+                .count();
+        return activeOrders < maxActiveOrders;
+    }
+
+    private boolean isWithinPickupRadius(User courier, CustomerOrder order) {
+        if (courier.getLat() == null || courier.getLng() == null
+                || order.getRestaurant().getLat() == null || order.getRestaurant().getLng() == null) {
+            return false;
+        }
+        return distanceInKm(courier.getLat(), courier.getLng(),
+                order.getRestaurant().getLat(), order.getRestaurant().getLng()) <= maxPickupRadiusKm;
+    }
+
+    private double distanceInKm(double lat1, double lng1, double lat2, double lng2) {
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lngDistance = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lngDistance / 2) * Math.sin(lngDistance / 2);
+        return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     @Transactional
