@@ -18,8 +18,11 @@ public class PublicRestaurantController {
     private final RestaurantService restaurantService;
 
     @GetMapping
-    public ResponseEntity<List<RestaurantDto>> getAllRestaurants() {
-        return ResponseEntity.ok(restaurantService.getAllRestaurants());
+    public ResponseEntity<List<RestaurantDto>> getAllRestaurants(
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng,
+            @RequestParam(defaultValue = "6") Double radiusKm) {
+        return ResponseEntity.ok(restaurantService.getAllRestaurants(lat, lng, radiusKm));
     }
 
     @GetMapping("/{id}")

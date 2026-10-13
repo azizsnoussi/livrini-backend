@@ -21,10 +21,21 @@ public class RestaurantService {
     private final RestaurantRepository restaurantRepository;
     private final MenuItemRepository menuItemRepository;
 
-    public List<RestaurantDto> getAllRestaurants() {
+    public List<RestaurantDto> getAllRestaurants(Double lat, Double lng, Double radiusKm) {
         return restaurantRepository.findAll().stream()
+                .filter(restaurant -> lat == null || lng == null || restaurant.getLat() == null || restaurant.getLng() == null
+                        || distanceInKm(lat, lng, restaurant.getLat(), restaurant.getLng()) <= radiusKm)
                 .map(this::mapToRestaurantDto)
                 .collect(Collectors.toList());
+    }
+
+    private double distanceInKm(double lat1, double lng1, double lat2, double lng2) {
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lngDistance = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lngDistance / 2) * Math.sin(lngDistance / 2);
+        return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     public RestaurantDto getRestaurantById(UUID id) {
